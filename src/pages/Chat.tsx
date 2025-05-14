@@ -4,6 +4,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Bot, User } from 'lucide-react';
 
 type MessageType = {
   id: string;
@@ -122,7 +123,7 @@ export default function Chat() {
 
   return (
     <MainLayout>
-      <div className="flex flex-col h-screen bg-background ml-0 md:ml-16 pt-14 md:pt-0">
+      <div className="flex flex-col h-screen bg-background pt-14 md:pt-0">
         {!hasStartedChat ? (
           <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in">
             <div className="max-w-2xl w-full text-center space-y-6">
@@ -185,8 +186,13 @@ export default function Chat() {
               {messages.map((message, index) => (
                 <div
                   key={message.id}
-                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-start`}
                 >
+                  {message.sender === 'bot' && (
+                    <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
+                      <Bot size={18} className="text-primary" />
+                    </div>
+                  )}
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-2 ${
                       message.sender === 'user'
@@ -200,11 +206,19 @@ export default function Chat() {
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
+                  {message.sender === 'user' && (
+                    <div className="bg-primary rounded-full p-2 ml-2 flex-shrink-0">
+                      <User size={18} className="text-primary-foreground" />
+                    </div>
+                  )}
                 </div>
               ))}
               
               {isTyping && (
-                <div className="flex justify-start">
+                <div className="flex justify-start items-start">
+                  <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
+                    <Bot size={18} className="text-primary" />
+                  </div>
                   <div className="bg-secondary text-secondary-foreground rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%] animate-chat-bubble-in">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>

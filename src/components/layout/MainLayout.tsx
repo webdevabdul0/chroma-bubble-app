@@ -15,7 +15,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     <div className="flex h-screen bg-background">
       <Sidebar open={isMobile ? false : sidebarOpen} setOpen={setSidebarOpen} />
       
-      <main className="flex-1 overflow-auto relative transition-all duration-300">
+      <main className={`flex-1 overflow-auto relative transition-all duration-300 ${sidebarOpen && !isMobile ? 'ml-64' : 'ml-0'}`}>
         {isMobile && (
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)} 

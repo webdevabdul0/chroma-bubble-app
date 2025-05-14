@@ -36,8 +36,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
   return (
     <div 
       className={cn(
-        "fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out w-64 bg-sidebar border-r border-sidebar-border",
-        open ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-20"
+        "fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out bg-sidebar border-r border-sidebar-border",
+        open ? "w-64" : "w-20",
+        open ? "translate-x-0" : "translate-x-0 md:translate-x-0"
       )}
     >
       <div className="flex flex-col h-full">
@@ -84,7 +85,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
         
         {/* User section */}
         <div className="px-3 py-4 mt-auto">
-          <div className="flex items-center space-x-3 px-3 py-2 rounded-md bg-sidebar-accent">
+          <div className={cn(
+            "flex items-center space-x-3 px-3 py-2 rounded-md bg-sidebar-accent",
+            !open && "justify-center px-0"
+          )}>
             <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                 <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>

@@ -1,8 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Menu } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { createChat } from '@/lib/firebaseChat';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -11,7 +12,9 @@ interface MainLayoutProps {
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   
   // Close mobile menu when switching to desktop
   useEffect(() => {
@@ -20,6 +23,22 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     }
   }, [isMobile]);
   
+  // Handler to select a chat
+  const handleSelectChat = (chatId: string) => {
+    setSelectedChatId(chatId);
+  };
+  
+  // Handler to create a new chat
+  const handleNewChat = async () => {
+    if (!user) return;
+    const defaultTitle = 'New Chat';
+    const defaultSystem = 'You are a helpful assistant.';
+    const chatId = await createChat(defaultTitle, defaultSystem, user.uid);
+    setSelectedChatId(chatId);
+    // Optionally, you can navigate to /chat?chatId=chatId if needed
+    window.location.href = `/chat?chatId=${chatId}`;
+  };
+  
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar - hidden on mobile by default */}
@@ -27,6 +46,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         open={isMobile ? mobileMenuOpen : sidebarOpen} 
         setOpen={isMobile ? setMobileMenuOpen : setSidebarOpen} 
         isMobile={isMobile}
+        selectedChatId={selectedChatId}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
       />
       
       <main 

@@ -1,38 +1,64 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+
 
 export default function Login() {
+
+
+
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { login, resetPassword } = useAuth();
+  const [resetSent, setResetSent] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      // This is where you'd integrate with Supabase for authentication
-      // const { error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      // For now, we'll just simulate a successful login
-      setTimeout(() => {
-        toast({
-          title: "Login successful",
-          description: "Welcome back to ChatBot!",
-        });
-        navigate('/chat');
-      }, 1500);
-    } catch (error) {
+      await login(email, password);
       toast({
-        title: "Login failed",
-        description: "Please check your credentials and try again.",
-        variant: "destructive",
+        title: 'Login successful',
+        description: 'Welcome back to ChatBot!',
+      });
+
+
+      navigate('/chat');
+    } catch (error: any) {
+      toast({
+        title: 'Login failed',
+        description: error.message || 'Please check your credentials and try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await resetPassword(resetEmail);
+      setResetSent(true);
+      toast({
+        title: 'Reset email sent',
+        description: 'Check your inbox for password reset instructions.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Reset failed',
+        description: error.message || 'Could not send reset email.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -55,61 +81,81 @@ export default function Login() {
           <p className="text-muted-foreground mt-2">Sign in to continue to ChatBot</p>
         </div>
 
-        <div className="bg-card p-6 rounded-lg shadow-lg border border-border glass-morphism animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-secondary border-secondary"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <label htmlFor="password" className="text-sm font-medium">
-                  Password
+        <div className="bg-card p-6 rounded-lg shadow-lg border border-border glass-morphism animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          {showReset ? (
+            <form onSubmit={handleReset} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="resetEmail" className="text-sm font-medium">
+                  Enter your email to reset password
                 </label>
-                <Link to="/forgot-password" className="text-xs text-primary hover:underline">
-                  Forgot password?
-                </Link>
+                <Input
+                  id="resetEmail"
+                  type="email"
+                  placeholder="name@example.com"
+                  required
+                  value={resetEmail}
+                  onChange={e => setResetEmail(e.target.value)}
+                  className="bg-secondary border-secondary"
+                />
               </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-secondary border-secondary"
-              />
-            </div>
-
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? (
-                <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : "Sign In"}
-            </Button>
-          </form>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Reset Email'}
+              </Button>
+              <Button type="button" variant="secondary" className="w-full" onClick={() => setShowReset(false)}>
+                Back to Login
+              </Button>
+              {resetSent && <p className="text-xs text-green-600 mt-2">Reset email sent! Check your inbox.</p>}
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="bg-secondary border-secondary"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <label htmlFor="password" className="text-sm font-medium">
+                    Password
+                  </label>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowReset(true)}>
+                    Forgot password?
+                  </button>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="bg-secondary border-secondary"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : 'Sign In'}
+              </Button>
+            </form>
+          )}
         </div>
 
-        <div className="text-center mt-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+        <div className="text-center mt-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
           <p className="text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Don't have an account?{' '}
             <Link to="/signup" className="text-primary hover:underline">
               Sign up
             </Link>

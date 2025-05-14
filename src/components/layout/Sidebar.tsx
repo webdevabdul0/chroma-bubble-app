@@ -1,14 +1,15 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
   open: boolean;
   setOpen: (open: boolean) => void;
+  isMobile: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, isMobile }) => {
   const location = useLocation();
   
   const navigation = [
@@ -36,9 +37,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
   return (
     <div 
       className={cn(
-        "fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out bg-sidebar border-r border-sidebar-border",
+        "fixed inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border",
+        "transform transition-all duration-300 ease-in-out",
+        // Different width based on state
         open ? "w-64" : "w-20",
-        open ? "translate-x-0" : "translate-x-0 md:translate-x-0"
+        // Different translation for mobile vs desktop
+        isMobile ? (open ? "translate-x-0" : "-translate-x-full") : "translate-x-0",
+        // Hide on mobile when closed
+        isMobile && !open && "invisible opacity-0"
       )}
     >
       <div className="flex flex-col h-full">
@@ -53,14 +59,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             </div>
             {open && <span className="font-bold text-lg text-gradient-primary">ChatBot</span>}
           </div>
-          <button 
-            onClick={() => setOpen(!open)} 
-            className="md:block hidden"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${open ? "" : "rotate-180"}`}>
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </button>
+          {/* Only show toggle for desktop */}
+          {!isMobile && (
+            <button 
+              onClick={() => setOpen(!open)} 
+              className="focus:outline-none"
+              aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${open ? "" : "rotate-180"}`}>
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+            </button>
+          )}
         </div>
         
         {/* Navigation */}
@@ -76,6 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 !open && "justify-center"
               )}
+              onClick={() => isMobile && setOpen(false)}
             >
               <span>{item.icon}</span>
               {open && <span>{item.name}</span>}

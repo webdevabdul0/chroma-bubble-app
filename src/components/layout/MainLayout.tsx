@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Menu } from 'lucide-react';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -9,28 +10,48 @@ interface MainLayoutProps {
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useIsMobile();
+  
+  // Close mobile menu when switching to desktop
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileMenuOpen(false);
+    }
+  }, [isMobile]);
   
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar open={isMobile ? false : sidebarOpen} setOpen={setSidebarOpen} />
+      {/* Sidebar - hidden on mobile by default */}
+      <Sidebar 
+        open={isMobile ? mobileMenuOpen : sidebarOpen} 
+        setOpen={isMobile ? setMobileMenuOpen : setSidebarOpen} 
+        isMobile={isMobile}
+      />
       
       <main 
-        className={`flex-1 overflow-auto relative transition-all duration-300 ${
+        className={`flex-1 overflow-auto relative transition-all duration-300 ease-in-out ${
           sidebarOpen && !isMobile ? 'ml-64' : isMobile ? 'ml-0' : 'ml-20'
         }`}
       >
+        {/* Mobile menu button */}
         {isMobile && (
           <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)} 
-            className="fixed top-4 left-4 z-50 p-2 rounded-md bg-secondary text-secondary-foreground"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
+            className="fixed top-4 left-4 z-40 p-2 rounded-md bg-secondary text-secondary-foreground"
+            aria-label="Toggle menu"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-menu">
-              <line x1="4" x2="20" y1="12" y2="12"/>
-              <line x1="4" x2="20" y1="6" y2="6"/>
-              <line x1="4" x2="20" y1="18" y2="18"/>
-            </svg>
+            <Menu size={24} />
           </button>
+        )}
+        
+        {/* Overlay to close mobile menu when clicking outside */}
+        {isMobile && mobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-30 transition-opacity duration-300"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
         )}
         
         {children}

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -123,7 +122,7 @@ export default function Chat() {
 
   return (
     <MainLayout>
-      <div className="flex flex-col h-screen bg-background pt-14 md:pt-0">
+      <div className="flex flex-col h-screen bg-background pt-16 md:pt-0">
         {!hasStartedChat ? (
           <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in">
             <div className="max-w-2xl w-full text-center space-y-6">

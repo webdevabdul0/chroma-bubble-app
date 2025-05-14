@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Bot, User } from 'lucide-react';
+import  Player  from 'lottie-react';
+import ModelClient, { isUnexpected } from "@azure-rest/ai-inference";
+import { AzureKeyCredential } from "@azure/core-auth";
+import robotAnimation from '../../public/robot-animation.json';
 
 type MessageType = {
   id: string;
@@ -25,94 +29,80 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  // Replace bot response logic with OpenAI API call
+  const sendToOpenAI = async (userInput: string): Promise<string> => {
+    const token =  "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";
+    const endpoint = "https://models.github.ai/inference";
+    const model = "openai/gpt-4.1";
+    const client = ModelClient(endpoint, new AzureKeyCredential(token));
+    try {
+      const response = await client.path("/chat/completions").post({
+        body: {
+          messages: [
+            { role: "system", content: "You are a helpful assistant." },
+            { role: "user", content: userInput }
+          ],
+          temperature: 1.0,
+          top_p: 1.0,
+          model: model
+        }
+      });
+      if (isUnexpected(response)) {
+        throw response.body.error;
+      }
+      return response.body.choices[0].message.content;
+    } catch (err) {
+      return "Sorry, I couldn't get a response from the assistant.";
+    }
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!inputValue.trim()) return;
-    
-    // Add user message
     const userMessage: MessageType = {
       id: Date.now().toString(),
       content: inputValue,
       sender: 'user',
       timestamp: new Date()
     };
-    
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setHasStartedChat(true);
-    
-    // Simulate bot typing
     setIsTyping(true);
-    
-    // Simulate bot response after a delay
-    setTimeout(() => {
-      const botMessage: MessageType = {
-        id: (Date.now() + 1).toString(),
-        content: getBotResponse(inputValue),
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false);
-    }, 1500);
+    // Call OpenAI API for bot response
+    const botContent = await sendToOpenAI(userMessage.content);
+    const botMessage: MessageType = {
+      id: (Date.now() + 1).toString(),
+      content: botContent,
+      sender: 'bot',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, botMessage]);
+    setIsTyping(false);
   };
   
-  const handleQuickQuestion = (question: string) => {
-    // Add user message
+  const handleQuickQuestion = async (question: string) => {
     const userMessage: MessageType = {
       id: Date.now().toString(),
       content: question,
       sender: 'user',
       timestamp: new Date()
     };
-    
     setMessages([userMessage]);
     setHasStartedChat(true);
-    
-    // Simulate bot typing
     setIsTyping(true);
-    
-    // Simulate bot response after a delay
-    setTimeout(() => {
-      const botMessage: MessageType = {
-        id: (Date.now() + 1).toString(),
-        content: getBotResponse(question),
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false);
-    }, 1500);
+    // Call OpenAI API for bot response
+    const botContent = await sendToOpenAI(question);
+    const botMessage: MessageType = {
+      id: (Date.now() + 1).toString(),
+      content: botContent,
+      sender: 'bot',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, botMessage]);
+    setIsTyping(false);
   };
   
-  // Simple bot response logic
-  const getBotResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-    
-    if (input.includes('hello') || input.includes('hi')) {
-      return 'Hello! How can I assist you today?';
-    } else if (input.includes('help')) {
-      return 'I\'m here to help! You can ask me questions about our products, services, or just chat.';
-    } else if (input.includes('bye') || input.includes('goodbye')) {
-      return 'Goodbye! Have a great day!';
-    } else if (input.includes('thanks') || input.includes('thank you')) {
-      return 'You\'re welcome! Is there anything else I can help you with?';
-    } else if (input.includes('weather')) {
-      return 'I\'m sorry, I don\'t have access to real-time weather data. But I can help with product questions!';
-    } else if (input.includes('name')) {
-      return 'I\'m ChatBot, your friendly AI assistant! How can I make your day better?';
-    } else if (input.includes('feature') || input.includes('product')) {
-      return 'Our products offer cutting-edge features designed to enhance your productivity. Would you like to know more about a specific product?';
-    } else if (input.includes('price') || input.includes('cost')) {
-      return 'Our pricing is competitive and flexible. We offer different tiers to suit your needs. Would you like to see our pricing plans?';
-    } else {
-      return 'That\'s interesting. Can you tell me more about that?';
-    }
-  };
-
   // Quick questions for the welcome screen
   const quickQuestions = [
     "What features do your products offer?",
@@ -126,11 +116,19 @@ export default function Chat() {
         {!hasStartedChat ? (
           <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in">
             <div className="max-w-2xl w-full text-center space-y-6">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full opacity-30 animate-glow"></div>
-                <h1 className="text-4xl md:text-5xl font-extrabold text-gradient-primary relative z-10">
-                  Welcome to ChatBot
-                </h1>
+              <div className="flex flex-col items-center">
+                <Player
+                  autoplay
+                  loop
+                  animationData={robotAnimation}
+                  style={{ height: 180, width: 180 }}
+                />
+                <div className="relative mt-2">
+                  <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full opacity-30 animate-glow"></div>
+                  <h1 className="text-4xl md:text-5xl font-extrabold text-gradient-primary relative z-10">
+                    Welcome to ChatBot
+                  </h1>
+                </div>
               </div>
               
               <p className="text-lg text-muted-foreground mx-auto max-w-lg">
@@ -195,10 +193,9 @@ export default function Chat() {
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-2 ${
                       message.sender === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-tr-none animate-chat-bubble-out'
-                        : 'bg-secondary text-secondary-foreground rounded-tl-none animate-chat-bubble-in'
+                        ? 'bg-primary text-primary-foreground rounded-tr-none'
+                        : 'bg-secondary text-secondary-foreground rounded-tl-none'
                     }`}
-                    style={{ animationDelay: `${index * 0.1}s` }}
                   >
                     <p>{message.content}</p>
                     <p className="text-xs opacity-70 mt-1">
@@ -218,12 +215,8 @@ export default function Chat() {
                   <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
                     <Bot size={18} className="text-primary" />
                   </div>
-                  <div className="bg-secondary text-secondary-foreground rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%] animate-chat-bubble-in">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                      <div className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                    </div>
+                  <div className="bg-secondary text-secondary-foreground rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]">
+                    <span className="text-muted-foreground">Assistant is typing...</span>
                   </div>
                 </div>
               )}

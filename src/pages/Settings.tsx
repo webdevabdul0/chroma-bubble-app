@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -63,11 +62,11 @@ export default function Settings() {
   return (
     <MainLayout>
       <div className="max-w-4xl mx-auto p-4 md:p-8">
-        <h1 className="text-3xl font-bold mb-8 text-gradient-primary animate-fade-in">Settings</h1>
+        <h1 className="text-3xl font-bold mb-8 text-gradient-primary">Settings</h1>
         
         <div className="space-y-8">
           {/* Account Section */}
-          <section className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <section>
             <h2 className="text-xl font-semibold mb-4">Account</h2>
             <div className="bg-card rounded-lg p-6 border border-border glass-morphism">
               <div className="flex flex-col md:flex-row items-start md:items-center mb-8">
@@ -127,7 +126,7 @@ export default function Settings() {
           </section>
           
           {/* Theme Customization */}
-          <section className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
+          <section>
             <h2 className="text-xl font-semibold mb-4">Theme Customization</h2>
             <div className="bg-card rounded-lg p-6 border border-border glass-morphism">
               <p className="mb-4 text-muted-foreground">
@@ -163,7 +162,7 @@ export default function Settings() {
           </section>
           
           {/* Security Section */}
-          <section className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
+          <section>
             <h2 className="text-xl font-semibold mb-4">Security</h2>
             <div className="bg-card rounded-lg p-6 border border-border glass-morphism">
               <form onSubmit={handleChangePassword} className="space-y-4">
@@ -217,7 +216,7 @@ export default function Settings() {
           </section>
           
           {/* Danger Zone */}
-          <section className="animate-fade-in" style={{ animationDelay: "0.4s" }}>
+          <section>
             <h2 className="text-xl font-semibold mb-4 text-destructive">Danger Zone</h2>
             <div className="bg-card rounded-lg p-6 border border-destructive/20 glass-morphism">
               <h3 className="font-medium mb-2">Delete account</h3>

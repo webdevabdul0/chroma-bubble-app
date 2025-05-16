@@ -4,7 +4,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Bot, User } from 'lucide-react';
+import { Bot, User, UploadCloud } from 'lucide-react';
 import Player from 'lottie-react';
 import ModelClient, { isUnexpected } from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
@@ -15,9 +15,12 @@ import {
   getChats,
   updateSystemMessage,
   ChatMessage,
+  updateChatTitle,
 } from '@/lib/firebaseChat';
 import type { Chat as ChatType } from '@/lib/firebaseChat';
 import { useAuth } from '@/contexts/AuthContext';
+import axios from 'axios';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Chat() {
   const [searchParams] = useSearchParams();
@@ -33,6 +36,9 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   // Load chat and messages
   useEffect(() => {
@@ -41,19 +47,63 @@ export default function Chat() {
       return;
     }
     if (!chatId || !user) return;
-    (async () => {
-      const chats = await getChats(user.uid);
-      const found = chats.find(c => c.id === chatId);
-      if (found) {
-        setChat(found);
-        setSystemMessage(found.systemMessage);
-        setSystemMessageEdit(found.systemMessage);
+    
+    const loadChat = async () => {
+      try {
+        const chats = await getChats(user.uid);
+        const found = chats.find(c => c.id === chatId);
+        if (found) {
+          setChat(found);
+          setSystemMessage(found.systemMessage);
+          setSystemMessageEdit(found.systemMessage);
+          
+          // Load messages after chat is set
+          const msgs = await getChatMessages(chatId);
+          setMessages(msgs.filter(m => m.userId === user.uid));
+          setHasStartedChat(msgs.length > 0);
+        } else {
+          // If chat not found, redirect to new chat
+          navigate('/chat');
+        }
+      } catch (error) {
+        console.error('Error loading chat:', error);
+        navigate('/chat');
       }
-      const msgs = await getChatMessages(chatId);
-      setMessages(msgs.filter(m => m.userId === user.uid));
-      setHasStartedChat(msgs.length > 0);
-    })();
+    };
+
+    loadChat();
   }, [chatId, user, loading]);
+
+  // Update chat title based on first message
+  useEffect(() => {
+    if (messages.length > 0 && !chat?.title) {
+      const firstMessage = messages[0].content;
+      const generateTitle = async () => {
+        try {
+          const response = await sendToOpenAI(
+            `Generate a short, concise title (max 5 words) for this conversation based on the first message: "${firstMessage}". Return only the title, no additional text.`
+          );
+          const title = response.replace(/[""]/g, '').trim();
+          if (chatId) {
+            await updateChatTitle(chatId, title);
+            // Update the local chat state with the new title
+            setChat(prev => prev ? { ...prev, title } : null);
+          }
+        } catch (error) {
+          console.error('Error generating title:', error);
+          // Fallback to a truncated version of the first message
+          const fallbackTitle = firstMessage.length > 30 
+            ? firstMessage.substring(0, 30) + '...' 
+            : firstMessage;
+          if (chatId) {
+            await updateChatTitle(chatId, fallbackTitle);
+            setChat(prev => prev ? { ...prev, title: fallbackTitle } : null);
+          }
+        }
+      };
+      generateTitle();
+    }
+  }, [messages, chat?.title, chatId]);
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -119,6 +169,27 @@ export default function Chat() {
     setInputValue('');
     setHasStartedChat(true);
     setIsTyping(true);
+
+    // If this is the first message, generate a title using GPT
+    if (messages.length === 0) {
+      try {
+        const response = await sendToOpenAI(
+          `Generate a short, concise title (max 5 words) for this conversation based on the first message: "${inputValue}". Return only the title, no additional text.`
+        );
+        const title = response.replace(/[""]/g, '').trim();
+        await updateChatTitle(chatId, title);
+        setChat(prev => prev ? { ...prev, title } : null);
+      } catch (error) {
+        console.error('Error generating title:', error);
+        // Fallback to a truncated version of the first message
+        const fallbackTitle = inputValue.length > 30 
+          ? inputValue.substring(0, 30) + '...' 
+          : inputValue;
+        await updateChatTitle(chatId, fallbackTitle);
+        setChat(prev => prev ? { ...prev, title: fallbackTitle } : null);
+      }
+    }
+
     // Call OpenAI API for bot response
     const botContent = await sendToOpenAI(userMessage.content);
     const botMessage: Omit<ChatMessage, 'id'> = {
@@ -173,6 +244,92 @@ export default function Chat() {
     'Can you tell me more about your company?',
   ];
 
+  // Format GPT response
+  const formatGPTResponse = (text: string) => {
+    // Split by double newlines to handle paragraphs
+    const paragraphs = text.split('\n\n');
+    
+    return paragraphs.map(paragraph => {
+      // Handle bullet points
+      if (paragraph.startsWith('- ')) {
+        return `<ul><li>${paragraph.substring(2)}</li></ul>`;
+      }
+      
+      // Handle bold text
+      let formatted = paragraph.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      
+      // Handle links
+      formatted = formatted.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">$1</a>');
+      
+      // Handle code blocks
+      formatted = formatted.replace(/`(.*?)`/g, '<code class="bg-secondary px-1 py-0.5 rounded">$1</code>');
+      
+      return `<p>${formatted}</p>`;
+    }).join('');
+  };
+
+  // Update the message display to use formatted content
+  const renderMessage = (message: ChatMessage) => (
+    <div
+      key={message.id}
+      className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-start`}
+    >
+      {message.sender === 'bot' && (
+        <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
+          <Bot size={18} className="text-primary" />
+        </div>
+      )}
+      <div
+        className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+          message.sender === 'user'
+            ? 'bg-primary text-primary-foreground rounded-tr-none'
+            : 'bg-secondary text-secondary-foreground rounded-tl-none'
+        }`}
+      >
+        {message.sender === 'bot' ? (
+          <div dangerouslySetInnerHTML={{ __html: formatGPTResponse(message.content) }} />
+        ) : (
+          <p>{message.content}</p>
+        )}
+        <p className="text-xs opacity-70 mt-1">
+          {message.timestamp?.toDate ? message.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+        </p>
+      </div>
+      {message.sender === 'user' && (
+        <div className="bg-primary rounded-full p-2 ml-2 flex-shrink-0">
+          <User size={18} className="text-primary-foreground" />
+        </div>
+      )}
+    </div>
+  );
+
+  // PDF upload handler
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await axios.post('http://localhost:5678/webhook-test/b4d9a6d2-b54c-4371-869b-3c3f1b38caa8', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast({
+        title: 'Success',
+        description: response.data.message || 'Successfully uploaded PDF.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Upload failed',
+        description: error?.response?.data?.message || error.message || 'Failed to upload PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <MainLayout>
       <div className="flex flex-col h-screen bg-background pt-16 md:pt-0">
@@ -180,16 +337,13 @@ export default function Chat() {
           <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in">
             <div className="max-w-2xl w-full text-center space-y-6">
               <div className="flex flex-col items-center">
-                <Player
-                  autoplay
-                  loop
-                  animationData={robotAnimation}
-                  style={{ height: 180, width: 180 }}
-                />
+                <div className="h-48 w-48 relative">
+                  <Player animationData={robotAnimation} loop={true} className="w-full h-full" />
+                </div>
                 <div className="relative mt-2">
                   <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full opacity-30 animate-glow"></div>
                   <h1 className="text-4xl md:text-5xl font-extrabold text-gradient-primary relative z-10">
-                    Welcome to ChatBot
+                    Welcome to Chroma Bubble
                   </h1>
                 </div>
               </div>
@@ -235,57 +389,39 @@ export default function Chat() {
           </div>
         ) : (
           <>
-            <div className="p-4 border-b border-border bg-card flex items-center gap-4">
-              <h1 className="text-xl font-bold text-gradient-primary flex-1">Chat Assistant</h1>
+            <div className="flex items-center justify-between p-4 border-b border-border bg-card">
+              <h1 className="text-xl font-bold text-gradient-primary flex-1">{chat?.title || 'New Chat'}</h1>
               <div>
                 {editingSystem ? (
                   <div className="flex gap-2 items-center">
-                    <Input
-                      value={systemMessageEdit}
-                      onChange={e => setSystemMessageEdit(e.target.value)}
-                      className="w-64"
-                    />
+                    <div className="flex items-center gap-2 bg-secondary/50 px-3 py-1.5 rounded-full">
+                      <div className="bg-primary/20 rounded-full p-1">
+                        <Bot size={14} className="text-primary" />
+                      </div>
+                      <Input
+                        value={systemMessageEdit}
+                        onChange={e => setSystemMessageEdit(e.target.value)}
+                        className="w-64 bg-background/50 border-none focus-visible:ring-0 focus-visible:ring-offset-0 h-6 text-xs"
+                      />
+                    </div>
                     <Button size="sm" onClick={handleSystemEdit}>Save</Button>
                     <Button size="sm" variant="secondary" onClick={() => { setEditingSystem(false); setSystemMessageEdit(systemMessage); }}>Cancel</Button>
                   </div>
                 ) : (
                   <div className="flex gap-2 items-center">
-                    <span className="text-xs text-muted-foreground">System: {systemMessage}</span>
+                    <div className="flex items-center gap-2 bg-secondary/50 px-3 py-1.5 rounded-full">
+                      <div className="bg-primary/20 rounded-full p-1">
+                        <Bot size={14} className="text-primary" />
+                      </div>
+                      <span className="text-xs text-muted-foreground">System: {systemMessage}</span>
+                    </div>
                     <Button size="sm" variant="ghost" onClick={() => setEditingSystem(true)}>Edit</Button>
                   </div>
                 )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={message.id || index}
-                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-start`}
-                >
-                  {message.sender === 'bot' && (
-                    <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
-                      <Bot size={18} className="text-primary" />
-                    </div>
-                  )}
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                      message.sender === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-tr-none'
-                        : 'bg-secondary text-secondary-foreground rounded-tl-none'
-                    }`}
-                  >
-                    <p>{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {message.timestamp?.toDate ? message.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                    </p>
-                  </div>
-                  {message.sender === 'user' && (
-                    <div className="bg-primary rounded-full p-2 ml-2 flex-shrink-0">
-                      <User size={18} className="text-primary-foreground" />
-                    </div>
-                  )}
-                </div>
-              ))}
+              {messages.map(renderMessage)}
               {isTyping && (
                 <div className="flex justify-start items-start">
                   <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
@@ -299,6 +435,31 @@ export default function Chat() {
               <div ref={messagesEndRef} />
             </div>
             <div className="p-4 border-t border-border bg-card">
+              {/* PDF Upload UI */}
+              <div className="flex items-center mb-2 gap-2">
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  ref={fileInputRef}
+                  onChange={handlePdfUpload}
+                  style={{ display: 'none' }}
+                  disabled={uploading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  aria-label="Upload PDF"
+                >
+                  <UploadCloud className="w-5 h-5" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {uploading ? 'Uploading PDF...' : 'Upload a PDF to the vector database'}
+                </span>
+              </div>
+              {/* Main chat input */}
               <form onSubmit={handleSubmit} className="flex space-x-2">
                 <Input
                   value={inputValue}

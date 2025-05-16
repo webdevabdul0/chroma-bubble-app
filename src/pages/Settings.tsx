@@ -4,13 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Settings() {
   const { currentTheme, setTheme } = useTheme();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   
-  const [name, setName] = useState('John Doe');
-  const [email, setEmail] = useState('john@example.com');
+  const [name, setName] = useState(user?.displayName || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [passwordCurrent, setPasswordCurrent] = useState('');
   const [passwordNew, setPasswordNew] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -23,18 +27,24 @@ export default function Settings() {
     { name: 'Orange', value: 'orange' }
   ];
   
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulating update
-    setTimeout(() => {
+    try {
+      // Here you would typically update the user's profile in your backend
       toast({
         title: "Profile updated",
         description: "Your profile has been updated successfully.",
       });
-    }, 500);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
   
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (passwordNew !== passwordConfirm) {
@@ -46,8 +56,8 @@ export default function Settings() {
       return;
     }
     
-    // Simulating password change
-    setTimeout(() => {
+    try {
+      // Here you would typically update the user's password in your backend
       toast({
         title: "Password changed",
         description: "Your password has been changed successfully.",
@@ -56,7 +66,26 @@ export default function Settings() {
       setPasswordCurrent('');
       setPasswordNew('');
       setPasswordConfirm('');
-    }, 500);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to change password. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to logout. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -71,9 +100,7 @@ export default function Settings() {
             <div className="bg-card rounded-lg p-6 border border-border glass-morphism">
               <div className="flex flex-col md:flex-row items-start md:items-center mb-8">
                 <div className="bg-secondary rounded-full w-24 h-24 flex items-center justify-center mb-4 md:mb-0 md:mr-6 relative overflow-hidden">
-                  <span className="text-3xl text-primary">
-                    {name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                  </span>
+                  <img src="/bubble-icon.svg" alt="Profile" className="w-16 h-16" />
                   <div className="absolute inset-0 bg-gradient-to-b from-primary/0 to-primary/20"></div>
                 </div>
                 <div>
@@ -81,7 +108,7 @@ export default function Settings() {
                   <p className="text-muted-foreground">{email}</p>
                   <div className="mt-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
-                      Owner
+                      {user?.emailVerified ? 'Verified' : 'Unverified'}
                     </span>
                   </div>
                 </div>
@@ -161,17 +188,17 @@ export default function Settings() {
             </div>
           </section>
           
-          {/* Security Section */}
+          {/* Password Section */}
           <section>
-            <h2 className="text-xl font-semibold mb-4">Security</h2>
+            <h2 className="text-xl font-semibold mb-4">Change Password</h2>
             <div className="bg-card rounded-lg p-6 border border-border glass-morphism">
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor="password-current" className="text-sm font-medium">
+                  <label htmlFor="currentPassword" className="text-sm font-medium">
                     Current Password
                   </label>
                   <Input
-                    id="password-current"
+                    id="currentPassword"
                     type="password"
                     value={passwordCurrent}
                     onChange={(e) => setPasswordCurrent(e.target.value)}
@@ -180,11 +207,11 @@ export default function Settings() {
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="password-new" className="text-sm font-medium">
+                  <label htmlFor="newPassword" className="text-sm font-medium">
                     New Password
                   </label>
                   <Input
-                    id="password-new"
+                    id="newPassword"
                     type="password"
                     value={passwordNew}
                     onChange={(e) => setPasswordNew(e.target.value)}
@@ -193,11 +220,11 @@ export default function Settings() {
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="password-confirm" className="text-sm font-medium">
+                  <label htmlFor="confirmPassword" className="text-sm font-medium">
                     Confirm New Password
                   </label>
                   <Input
-                    id="password-confirm"
+                    id="confirmPassword"
                     type="password"
                     value={passwordConfirm}
                     onChange={(e) => setPasswordConfirm(e.target.value)}
@@ -205,27 +232,22 @@ export default function Settings() {
                   />
                 </div>
                 
-                <Button 
-                  type="submit"
-                  disabled={!passwordCurrent || !passwordNew || !passwordConfirm}
-                >
+                <Button type="submit">
                   Change Password
                 </Button>
               </form>
             </div>
           </section>
           
-          {/* Danger Zone */}
+          {/* Logout Section */}
           <section>
-            <h2 className="text-xl font-semibold mb-4 text-destructive">Danger Zone</h2>
-            <div className="bg-card rounded-lg p-6 border border-destructive/20 glass-morphism">
-              <h3 className="font-medium mb-2">Delete account</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Permanently delete your account and all associated data.
-                This action cannot be undone.
-              </p>
-              <Button variant="destructive">
-                Delete Account
+            <div className="bg-card rounded-lg p-6 border border-border glass-morphism">
+              <Button
+                variant="destructive"
+                onClick={handleLogout}
+                className="w-full"
+              >
+                Logout
               </Button>
             </div>
           </section>

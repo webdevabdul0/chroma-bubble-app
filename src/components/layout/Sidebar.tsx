@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { getChats, Chat } from '@/lib/firebaseChat';
 import { useAuth } from '@/contexts/AuthContext';
+import { onSnapshot, collection } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface SidebarProps {
   open: boolean;
@@ -20,20 +22,43 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, isMobile, selec
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
 
+  // Function to fetch chats
+  const fetchChats = async () => {
+    if (!user) return;
+    setLoadingChats(true);
+    try {
+      const chatList = await getChats(user.uid);
+      setChats(chatList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+    } catch (error) {
+      console.error('Error fetching chats:', error);
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
+  // Initial fetch
   useEffect(() => {
     if (!loading && !user) {
       navigate('/login');
       return;
     }
-    if (!user) return;
-    const fetchChats = async () => {
-      setLoadingChats(true);
-      const chatList = await getChats(user.uid);
-      setChats(chatList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-      setLoadingChats(false);
-    };
     fetchChats();
   }, [user, loading]);
+
+  // Set up real-time updates for chat titles
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(collection(db, 'chats'), (snapshot) => {
+      const updatedChats = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Chat))
+        .filter(chat => chat.userId === user.uid)
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setChats(updatedChats);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <div 
@@ -52,13 +77,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, isMobile, selec
         {/* Logo and New Chat */}
         <div className="p-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-full bg-primary animate-pulse-glow flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground">
-                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9 22 9 12 15 12 15 22"/>
-              </svg>
+            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+              <img src="/bubble-icon.svg" alt="Chroma Bubble" className="w-8 h-8" />
             </div>
-            {open && <span className="font-bold text-lg text-gradient-primary">ChatBot</span>}
+            {open && <span className="font-bold text-lg text-gradient-primary">Chroma Bubble</span>}
           </div>
           {/* Only show toggle for desktop */}
           {!isMobile && (
@@ -115,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, isMobile, selec
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                   </svg>
                 </span>
-                {open && <span className="truncate max-w-[140px]">{chat.title}</span>}
+                {open && <span className="truncate max-w-[140px]">{chat.title || 'New Chat'}</span>}
               </div>
             ))
           )}

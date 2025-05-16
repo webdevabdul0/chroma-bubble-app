@@ -61,4 +61,16 @@ export async function addMessageToChat(chatId: string, message: Omit<ChatMessage
 export async function updateSystemMessage(chatId: string, systemMessage: string) {
   const chatDoc = doc(db, 'chats', chatId);
   await updateDoc(chatDoc, { systemMessage });
-} 
+}
+
+export const updateChatTitle = async (chatId: string, title: string) => {
+  try {
+    await updateDoc(doc(db, 'chats', chatId), {
+      title,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating chat title:', error);
+    throw error;
+  }
+}; 

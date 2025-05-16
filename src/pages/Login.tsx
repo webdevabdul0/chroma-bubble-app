@@ -78,7 +78,7 @@ export default function Login() {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-gradient-primary">Welcome Back</h1>
-          <p className="text-muted-foreground mt-2">Sign in to continue to ChatBot</p>
+          <p className="text-muted-foreground mt-2">Sign in to continue to Chroma Bubble</p>
         </div>
 
         <div className="bg-card p-6 rounded-lg shadow-lg border border-border glass-morphism animate-fade-in" style={{ animationDelay: '0.1s' }}>

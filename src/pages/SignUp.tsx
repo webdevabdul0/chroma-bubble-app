@@ -48,7 +48,7 @@ export default function SignUp() {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-gradient-primary">Create an Account</h1>
-          <p className="text-muted-foreground mt-2">Join ChatBot today</p>
+          <p className="text-muted-foreground mt-2">Join Chroma Bubble today</p>
         </div>
 
         <div className="bg-card p-6 rounded-lg shadow-lg border border-border glass-morphism animate-fade-in" style={{ animationDelay: '0.1s' }}>

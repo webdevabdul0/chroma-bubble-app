@@ -196,9 +196,10 @@ export default function Chat() {
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
-      // Upload to n8n as before
+      // Upload to n8n as before, but also send the hash
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('pdfId', hash); // Pass the hash to the webhook
       await axios.post('http://localhost:5678/webhook-test/b4d9a6d2-b54c-4371-869b-3c3f1b38caa8', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -238,10 +239,32 @@ export default function Chat() {
       return;
     }
     if (chatMode === 'pdf' && pdfId) {
+      // Show user message immediately
+      const userMessage: Omit<ChatMessage, 'id'> = {
+        chatId,
+        content: inputValue,
+        sender: 'user',
+        timestamp: new Date(),
+        userId: user.uid,
+      };
+      setMessages(prev => [...prev, { ...userMessage, id: Date.now().toString() }]);
+      await addMessageToChat(chatId, userMessage);
+      setInputValue('');
+      setHasStartedChat(true);
+      setIsTyping(true);
+      // Show 'Reading your PDF...' bot message
+      const readingMsg: Omit<ChatMessage, 'id'> = {
+        chatId,
+        content: 'Reading your PDF... 📄',
+        sender: 'bot',
+        timestamp: new Date(),
+        userId: user.uid,
+      };
+      setMessages(prev => [...prev, { ...readingMsg, id: (Date.now() + 1).toString() }]);
       // Get OpenAI embedding
       const embeddingRes = await axios.post('https://api.openai.com/v1/embeddings', {
         model: 'text-embedding-3-small',
-        input: inputValue,
+        input: userMessage.content,
       }, {
         headers: { 'Authorization': `Bearer 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` }
       });
@@ -252,8 +275,12 @@ export default function Chat() {
         pdfId,
       });
       const contextChunks = pineconeRes.data.matches.map((m: any) => m.metadata.text).join('\n');
-      // Send context + question to your existing chat completion logic
-      const botContent = await sendToOpenAI(`${contextChunks}\n\nUser: ${inputValue}`);
+      // Use a robust prompt
+      const prompt = `You are a helpful assistant. Use the following context from a PDF to answer the user's question. If the answer is not in the context, say you don't know.\n\nContext:\n${contextChunks}\n\nUser: ${userMessage.content}`;
+      const botContent = await sendToOpenAI(prompt);
+      // Remove the 'Reading your PDF...' message
+      setMessages(prev => prev.filter(m => m.content !== 'Reading your PDF... 📄'));
+      // Show the real bot message
       const botMessage: Omit<ChatMessage, 'id'> = {
         chatId,
         content: '',
@@ -263,7 +290,6 @@ export default function Chat() {
       };
       await typeBotMessage(botContent, botMessage);
       setIsTyping(false);
-      setInputValue('');
       return;
     }
     // Normal chat logic
@@ -365,7 +391,11 @@ export default function Chat() {
     >
       {message.sender === 'bot' && (
         <div className="bg-primary/20 rounded-full p-2 mr-2 flex-shrink-0">
-          <Bot size={18} className="text-primary" />
+          {chatMode === 'pdf' ? (
+            <FileText size={18} className="text-primary" />
+          ) : (
+            <Bot size={18} className="text-primary" />
+          )}
         </div>
       )}
       <div
@@ -409,8 +439,9 @@ export default function Chat() {
         pdfId,
       });
       const contextChunks = pineconeRes.data.matches.map((m: any) => m.metadata.text).join('\n');
-      // Send context + question to your existing chat completion logic
-      const botContent = await sendToOpenAI(`${contextChunks}\n\nUser: ${question}`);
+      // Use a robust prompt
+      const prompt = `You are a helpful assistant. Use the following context from a PDF to answer the user's question. If the answer is not in the context, say you don't know.\n\nContext:\n${contextChunks}\n\nUser: ${question}`;
+      const botContent = await sendToOpenAI(prompt);
       const botMessage: Omit<ChatMessage, 'id'> = {
         chatId,
         content: '',
@@ -508,7 +539,16 @@ export default function Chat() {
         ) : (
           <>
             <div className="flex items-center justify-between p-4 border-b border-border bg-card">
-              <h1 className="text-xl font-bold text-gradient-primary flex-1">{chat?.title || 'New Chat'}</h1>
+              {chatMode === 'pdf' ? (
+                <div className="flex items-center gap-3">
+                  <FileText size={28} className="text-primary" />
+                  <span className="font-bold text-gradient-primary">PDF Chat</span>
+                  <span className="text-xs text-muted-foreground ml-2"> PDF Session</span>
+                  <button className="ml-4 px-3 py-1 rounded bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-destructive/80 transition" onClick={() => setChatMode('normal')}>Exit PDF Session</button>
+                </div>
+              ) : (
+                <h1 className="text-xl font-bold text-gradient-primary flex-1">{chat?.title || 'New Chat'}</h1>
+              )}
               <div>
                 {editingSystem ? (
                   <div className="flex gap-2 items-center">
@@ -555,27 +595,36 @@ export default function Chat() {
             <div className="p-4 border-t border-border bg-card">
               {/* PDF Upload UI */}
               <div className="flex items-center mb-2 gap-2">
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  ref={fileInputRef}
-                  onChange={handlePdfUpload}
-                  style={{ display: 'none' }}
-                  disabled={uploading}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  aria-label="Upload PDF"
-                >
-                  <UploadCloud className="w-5 h-5" />
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {uploading ? 'Uploading PDF...' : 'Upload a PDF to the vector database'}
-                </span>
+                {chatMode === 'pdf' ? (
+                  <div className="flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full">
+                    <FileText size={20} className="text-primary" />
+                    <span className="text-xs text-muted-foreground">Talking to PDF...</span>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      ref={fileInputRef}
+                      onChange={handlePdfUpload}
+                      style={{ display: 'none' }}
+                      disabled={uploading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      aria-label="Upload PDF"
+                    >
+                      <UploadCloud className="w-5 h-5" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      {uploading ? 'Uploading PDF...' : 'Upload a PDF to the vector database'}
+                    </span>
+                  </>
+                )}
               </div>
               {/* Main chat input */}
               <form onSubmit={handleSubmit} className="flex space-x-2">

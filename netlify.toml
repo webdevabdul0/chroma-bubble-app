@@ -4,3 +4,5 @@
 
 [dev]
   functions = "netlify/functions"
+  targetPort = 8080 # This tells Netlify Dev your Vite dev server runs on port 8080
+  port = 8888       # Optional: This is where Netlify Dev will run (default is 8888)

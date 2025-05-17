@@ -4,7 +4,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Bot, User, UploadCloud } from 'lucide-react';
+import { Bot, User, UploadCloud, FileText, MessageCircle } from 'lucide-react';
 import Player from 'lottie-react';
 import ModelClient, { isUnexpected } from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
@@ -16,11 +16,15 @@ import {
   updateSystemMessage,
   ChatMessage,
   updateChatTitle,
+  createChat,
 } from '@/lib/firebaseChat';
 import type { Chat as ChatType } from '@/lib/firebaseChat';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
 import { useToast } from '@/hooks/use-toast';
+import { collection, getDocs, setDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export default function Chat() {
   const [searchParams] = useSearchParams();
@@ -39,6 +43,9 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [chatMode, setChatMode] = useState<'normal' | 'pdf'>('normal');
+  const [pdfId, setPdfId] = useState<string | null>(null);
+  const [showModeDialog, setShowModeDialog] = useState(false);
 
   // Load chat and messages
   useEffect(() => {
@@ -154,9 +161,112 @@ export default function Chat() {
     }
   };
 
+  // Helper to hash PDF file
+  async function hashFile(file: File): Promise<string> {
+    const arrayBuffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Check Firestore for PDF hash
+  async function checkPdfExists(hash: string): Promise<boolean> {
+    const snap = await getDocs(collection(db, 'pdfs'));
+    return snap.docs.some(doc => doc.id === hash);
+  }
+
+  // Save PDF hash to Firestore
+  async function savePdfHash(hash: string) {
+    await setDoc(doc(db, 'pdfs', hash), { uploadedAt: new Date() });
+  }
+
+  // Modified PDF upload handler
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const hash = await hashFile(file);
+      setPdfId(hash);
+      const exists = await checkPdfExists(hash);
+      if (exists) {
+        console.log('PDF was already embedded.');
+        setUploading(false);
+        setShowModeDialog(true);
+        toast({ title: 'PDF Ready', description: 'This PDF was already embedded. Choose how you want to chat.' });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      // Upload to n8n as before
+      const formData = new FormData();
+      formData.append('file', file);
+      await axios.post('http://localhost:5678/webhook-test/b4d9a6d2-b54c-4371-869b-3c3f1b38caa8', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      await savePdfHash(hash);
+      setShowModeDialog(true);
+      toast({ title: 'PDF Ready', description: 'Choose how you want to chat.' });
+    } catch (error: any) {
+      toast({
+        title: 'Upload failed',
+        description: error?.response?.data?.message || error.message || 'Failed to upload PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Chat mode modal with animation
+  const AnimatedDialog = ({ open, onOpenChange, children }: any) => (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex flex-col items-center gap-4 transition-all duration-300 transform scale-95 opacity-0 data-[state=open]:scale-100 data-[state=open]:opacity-100">
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+
+  // In the chat input handler, branch logic based on chatMode
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !chatId || !user) return;
+    if (!inputValue.trim() || !user) return;
+    if (!chatId) {
+      const defaultTitle = 'New Chat';
+      const defaultSystem = 'You are a helpful assistant.';
+      const newChatId = await createChat(defaultTitle, defaultSystem, user.uid);
+      navigate(`/chat?chatId=${newChatId}`);
+      return;
+    }
+    if (chatMode === 'pdf' && pdfId) {
+      // Get OpenAI embedding
+      const embeddingRes = await axios.post('https://api.openai.com/v1/embeddings', {
+        model: 'text-embedding-3-small',
+        input: inputValue,
+      }, {
+        headers: { 'Authorization': `Bearer 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` }
+      });
+      const embedding = embeddingRes.data.data[0].embedding;
+      // Query Pinecone via Netlify function
+      const pineconeRes = await axios.post('/.netlify/functions/pinecone-query', {
+        embedding,
+        pdfId,
+      });
+      const contextChunks = pineconeRes.data.matches.map((m: any) => m.metadata.text).join('\n');
+      // Send context + question to your existing chat completion logic
+      const botContent = await sendToOpenAI(`${contextChunks}\n\nUser: ${inputValue}`);
+      const botMessage: Omit<ChatMessage, 'id'> = {
+        chatId,
+        content: '',
+        sender: 'bot',
+        timestamp: new Date(),
+        userId: user.uid,
+      };
+      await typeBotMessage(botContent, botMessage);
+      setIsTyping(false);
+      setInputValue('');
+      return;
+    }
+    // Normal chat logic
     const userMessage: Omit<ChatMessage, 'id'> = {
       chatId,
       content: inputValue,
@@ -176,7 +286,7 @@ export default function Chat() {
         const response = await sendToOpenAI(
           `Generate a short, concise title (max 5 words) for this conversation based on the first message: "${inputValue}". Return only the title, no additional text.`
         );
-        const title = response.replace(/[""]/g, '').trim();
+        const title = response.replace(/["\"]/g, '').trim();
         await updateChatTitle(chatId, title);
         setChat(prev => prev ? { ...prev, title } : null);
       } catch (error) {
@@ -203,31 +313,10 @@ export default function Chat() {
     setIsTyping(false);
   };
 
-  const handleQuickQuestion = async (question: string) => {
-    if (!chatId || !user) return;
-    const userMessage: Omit<ChatMessage, 'id'> = {
-      chatId,
-      content: question,
-      sender: 'user',
-      timestamp: new Date(),
-      userId: user.uid,
-    };
-    setMessages([{ ...userMessage, id: Date.now().toString() }]);
-    await addMessageToChat(chatId, userMessage);
-    setHasStartedChat(true);
-    setIsTyping(true);
-    // Call OpenAI API for bot response
-    const botContent = await sendToOpenAI(question);
-    const botMessage: Omit<ChatMessage, 'id'> = {
-      chatId,
-      content: '',
-      sender: 'bot',
-      timestamp: new Date(),
-      userId: user.uid,
-    };
-    await typeBotMessage(botContent, botMessage);
-    setIsTyping(false);
-  };
+  // Add a button to exit PDF chat mode
+  {chatMode === 'pdf' && (
+    <button className="ml-2 px-3 py-1 rounded bg-muted text-xs" onClick={() => setChatMode('normal')}>Exit PDF Chat</button>
+  )}
 
   // System message editing
   const handleSystemEdit = async () => {
@@ -303,31 +392,60 @@ export default function Chat() {
     </div>
   );
 
-  // PDF upload handler
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await axios.post('http://localhost:5678/webhook-test/b4d9a6d2-b54c-4371-869b-3c3f1b38caa8', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+  const handleQuickQuestion = async (question: string) => {
+    if (!chatId || !user) return;
+    if (chatMode === 'pdf' && pdfId) {
+      // Get OpenAI embedding
+      const embeddingRes = await axios.post('https://api.openai.com/v1/embeddings', {
+        model: 'text-embedding-3-small',
+        input: question,
+      }, {
+        headers: { 'Authorization': `Bearer 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` }
       });
-      toast({
-        title: 'Success',
-        description: response.data.message || 'Successfully uploaded PDF.',
+      const embedding = embeddingRes.data.data[0].embedding;
+      // Query Pinecone via Netlify function
+      const pineconeRes = await axios.post('/.netlify/functions/pinecone-query', {
+        embedding,
+        pdfId,
       });
-    } catch (error: any) {
-      toast({
-        title: 'Upload failed',
-        description: error?.response?.data?.message || error.message || 'Failed to upload PDF.',
-        variant: 'destructive',
-      });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      const contextChunks = pineconeRes.data.matches.map((m: any) => m.metadata.text).join('\n');
+      // Send context + question to your existing chat completion logic
+      const botContent = await sendToOpenAI(`${contextChunks}\n\nUser: ${question}`);
+      const botMessage: Omit<ChatMessage, 'id'> = {
+        chatId,
+        content: '',
+        sender: 'bot',
+        timestamp: new Date(),
+        userId: user.uid,
+      };
+      await typeBotMessage(botContent, botMessage);
+      setIsTyping(false);
+      setInputValue('');
+      return;
     }
+    // Normal chat logic
+    const userMessage: Omit<ChatMessage, 'id'> = {
+      chatId,
+      content: question,
+      sender: 'user',
+      timestamp: new Date(),
+      userId: user.uid,
+    };
+    setMessages([{ ...userMessage, id: Date.now().toString() }]);
+    await addMessageToChat(chatId, userMessage);
+    setHasStartedChat(true);
+    setIsTyping(true);
+    // Call OpenAI API for bot response
+    const botContent = await sendToOpenAI(question);
+    const botMessage: Omit<ChatMessage, 'id'> = {
+      chatId,
+      content: '',
+      sender: 'bot',
+      timestamp: new Date(),
+      userId: user.uid,
+    };
+    await typeBotMessage(botContent, botMessage);
+    setIsTyping(false);
   };
 
   return (
@@ -480,6 +598,19 @@ export default function Chat() {
           </>
         )}
       </div>
+      <AnimatedDialog open={showModeDialog} onOpenChange={setShowModeDialog}>
+        <h2 className="text-lg font-bold">How would you like to chat?</h2>
+        <div className="flex gap-6">
+          <button className="flex flex-col items-center p-4 rounded-lg border hover:bg-primary/10 transition-all duration-200" onClick={() => { setChatMode('normal'); setShowModeDialog(false); }}>
+            <MessageCircle size={32} className="mb-2 text-primary" />
+            <span>Normal Chat</span>
+          </button>
+          <button className="flex flex-col items-center p-4 rounded-lg border hover:bg-primary/10 transition-all duration-200" onClick={() => { setChatMode('pdf'); setShowModeDialog(false); }}>
+            <FileText size={32} className="mb-2 text-primary" />
+            <span>Talk to PDF</span>
+          </button>
+        </div>
+      </AnimatedDialog>
     </MainLayout>
   );
 }

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { getChats, Chat } from '@/lib/firebaseChat';
+import { getChats, Chat, deleteChat } from '@/lib/firebaseChat';
 import { useAuth } from '@/contexts/AuthContext';
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Trash } from 'lucide-react';
 
 interface SidebarProps {
   open: boolean;
@@ -122,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, isMobile, selec
                 className={cn(
                   "flex items-center space-x-2 px-4 py-3 rounded-md cursor-pointer transition-all",
                   chat.id === selectedChatId
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-primary/30 text-primary-foreground"
                     : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                   !open && "justify-center"
                 )}
@@ -137,7 +138,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, isMobile, selec
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                   </svg>
                 </span>
-                {open && <span className="truncate max-w-[140px]">{chat.title || 'New Chat'}</span>}
+                {open && <span className="truncate flex-1">{chat.title || 'New Chat'}</span>}
+                {open && (
+                  <button
+                    className="p-1 hover:bg-red-100 rounded transition"
+                    title="Delete chat"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await deleteChat(chat.id);
+                      setChats((prev) => prev.filter((c) => c.id !== chat.id));
+                      if (selectedChatId === chat.id) {
+                        onSelectChat(null);
+                        navigate('/chat');
+                      }
+                    }}
+                  >
+                    <Trash size={16} className="text-red-500/50" />
+                  </button>
+                )}
               </div>
             ))
           )}

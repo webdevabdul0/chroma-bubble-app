@@ -40,3 +40,13 @@
 .read-the-docs {
   color: #888;
 }
+
+
+.animate-bounce {
+  animation: bounce 1s infinite alternate;
+  display: inline-block;
+}
+@keyframes bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-6px); }
+}

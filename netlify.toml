@@ -1,0 +1,6 @@
+[build]
+  functions = "netlify/functions"
+  publish = "dist" # or "build" or wherever your frontend lives
+
+[dev]
+  functions = "netlify/functions"

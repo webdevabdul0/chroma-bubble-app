@@ -10,6 +10,8 @@ import {
   query,
   orderBy,
   serverTimestamp,
+  deleteDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 export type Chat = {
@@ -73,4 +75,17 @@ export const updateChatTitle = async (chatId: string, title: string) => {
     console.error('Error updating chat title:', error);
     throw error;
   }
-}; 
+};
+
+// Delete a chat and all its messages
+export async function deleteChat(chatId: string) {
+  const chatDoc = doc(db, 'chats', chatId);
+  // Delete all messages in the chat
+  const messagesRef = collection(db, 'chats', chatId, 'messages');
+  const messagesSnap = await getDocs(messagesRef);
+  const batch = writeBatch(db);
+  messagesSnap.forEach((msg) => batch.delete(msg.ref));
+  // Delete the chat document itself
+  batch.delete(chatDoc);
+  await batch.commit();
+} 

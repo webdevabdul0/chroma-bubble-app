@@ -247,7 +247,7 @@ export default function Chat() {
       });
       const embedding = embeddingRes.data.data[0].embedding;
       // Query Pinecone via Netlify function
-      const pineconeRes = await axios.post('/.netlify/functions/pinecone-query', {
+      const pineconeRes = await axios.post('https://chat-bubble-app.netlify.app/.netlify/functions/pinecone-query', {
         embedding,
         pdfId,
       });

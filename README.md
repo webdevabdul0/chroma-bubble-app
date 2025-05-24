@@ -39,8 +39,8 @@ A conversational AI application built with modern tooling, designed to provide s
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ai-chat-rag-app.git
-cd ai-chat-rag-app
+git clone https://github.com/webdevabdul0/chroma-bubble-app.git
+cd chroma-bubble-app
 
 # Install dependencies
 npm install

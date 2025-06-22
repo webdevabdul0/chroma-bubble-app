@@ -2,6 +2,11 @@
   functions = "netlify/functions"
   publish = "dist" # or "build" or wherever your frontend lives
 
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 [dev]
   functions = "netlify/functions"
   targetPort = 8080 # This tells Netlify Dev your Vite dev server runs on port 8080

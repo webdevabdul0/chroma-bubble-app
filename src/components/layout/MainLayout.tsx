@@ -4,6 +4,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createChat } from '@/lib/firebaseChat';
+import { useNavigate } from 'react-router-dom';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // Close mobile menu when switching to desktop
   useEffect(() => {
@@ -36,7 +38,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const chatId = await createChat(defaultTitle, defaultSystem, user.uid);
     setSelectedChatId(chatId);
     // Optionally, you can navigate to /chat?chatId=chatId if needed
-    window.location.href = `/chat?chatId=${chatId}`;
+    navigate(`/chat?chatId=${chatId}`);
+  };
+  
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
   };
   
   return (

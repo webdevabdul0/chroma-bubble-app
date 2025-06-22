@@ -133,10 +133,10 @@ export default function Chat() {
 
   // Send to OpenAI with context
   const sendToOpenAI = async (userInput: string): Promise<string> => {
-    const token = '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';
+    const token = import.meta.env.VITE_GITHUB_TOKEN;
     const endpoint = 'https://models.github.ai/inference';
     const model = 'openai/gpt-4.1';
-    const client = ModelClient(endpoint, new AzureKeyCredential(token));
+    const client = ModelClient(endpoint, new AzureKeyCredential(token!));
     // Prepare context
     const contextMsgs = [
       { role: 'system', content: systemMessage },
@@ -266,7 +266,7 @@ export default function Chat() {
         model: 'text-embedding-3-small',
         input: userMessage.content,
       }, {
-        headers: { 'Authorization': `Bearer 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` }
+        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}` }
       });
       const embedding = embeddingRes.data.data[0].embedding;
       // Query Pinecone via Netlify function
@@ -430,7 +430,7 @@ export default function Chat() {
         model: 'text-embedding-3-small',
         input: question,
       }, {
-        headers: { 'Authorization': `Bearer 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` }
+        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}` }
       });
       const embedding = embeddingRes.data.data[0].embedding;
       // Query Pinecone via Netlify function
